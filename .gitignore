@@ -2,3 +2,4 @@
 __pycache__/
 pg-*.png
 hdr.png
+out/

@@ -10,23 +10,20 @@ Her Pazartesi 08:30'da (İstanbul) raporu üretir, önizlemeyi sana yollar. Ekib
    - `SMTP_PASS`: uygulama şifresi
    - `MAIL_TO`: alıcılar, virgülle (ör. `a@bvportfoy.com,b@bvportfoy.com`)
    - `MAIL_CC`: opsiyonel
-4. Repo > Settings > Environments > New environment: `ekip-gonderim` > Required reviewers: kendi GitHub kullanıcın > Save.
-5. Actions sekmesi > "CFTC COT Haftalık Rapor" > Run workflow ile test et. MAIL_TO'yu ilk testte sadece kendi adresin yap.
+4. Actions sekmesi > "1 - COT Rapor Hazırla" > Run workflow ile test et. MAIL_TO'yu ilk testte sadece kendi adresin yap.
 
 ## Davranış
 - Veri doğrulaması başarısızsa ekibe gitmez, sadece sana [HATA] maili gelir.
 - Son COT haftası 11 günden eskiyse (CFTC gecikmesi) ekibe gitmez, sana [UYARI] gelir.
 - Canlı fiyat alınamazsa sabit fiyat kullanılır ve mailde belirtilir.
-- Gönderim saatini değiştirmek için `.github/workflows/cot_weekly.yml` içindeki cron'u düzenle (UTC).
+- Gönderim saatini değiştirmek için `.github/workflows/cot_1_hazirla.yml` içindeki cron'u düzenle (UTC).
 
 ## Lokal çalıştırma
     pip install -r requirements.txt
-    SMTP_USER=... SMTP_PASS=... MAIL_TO=... python send_weekly.py
+    SMTP_USER=... SMTP_PASS=... MAIL_TO=... python send_weekly.py prepare
 
 ## Onay akışı
-1. `prepare` job raporu üretir, sana `[ONAY BEKLİYOR]` konulu önizleme maili atar (PDF ekli, alıcı listesi görünür).
-2. GitHub da "review pending" bildirimi gönderir. Mail içindeki linke tıkla > Review deployments.
-3. **Approve**: aynı PDF ve aynı metin ekibe gider (yeniden üretilmez). **Reject**: hiçbir şey gitmez.
-4. Onay verilmezse iş 30 gün sonra kendiliğinden düşer.
-
-Not: Private repoda Environment reviewer için GitHub Pro gerekir (GitHub Student Developer Pack ile ücretsiz).
+1. `1 - COT Rapor Hazırla` (Pazartesi 08:30 veya manuel) raporu üretir, `out/` paketini artifact olarak yükler ve sana `[ONAY BEKLİYOR]` konulu önizleme maili atar (PDF ekli, alıcı listesi görünür).
+2. Onaylıyorsan maildeki linke tıkla > `2 - COT Ekibe Gönder (ONAY)` > Run workflow. Aynı PDF ve aynı metin ekibe gider, rapor yeniden üretilmez.
+3. Onaylamıyorsan hiçbir şey yapma; paket 7 gün sonra artifact ile birlikte düşer.
+4. `run_id` alanı boş bırakılırsa en son **başarılı** hazırlık run'ının paketi gönderilir; eski bir paketi göndermek için run id gir.

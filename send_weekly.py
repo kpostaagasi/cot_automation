@@ -72,7 +72,7 @@ Notional: Yahoo Finance canlı fiyat, tahviller par. Otomatik üretilmiştir.</p
     run_url = os.environ.get("RUN_URL", "")
     banner = f"""<div style="background:#FFF5F5;border:1px solid #BC1324;padding:10px;margin-bottom:12px;font-family:Arial">
 <b>ONAY BEKLİYOR.</b> Bu mail henüz ekibe gitmedi. Alıcılar: {", ".join(TO)}{(" | CC: " + ", ".join(CC)) if CC else ""}<br>
-Onay/red: <a href="{run_url}">GitHub'da incele</a> (Review deployments &gt; Approve / Reject)</div>"""
+Göndermek için: <a href="{run_url}">"2 - COT Ekibe Gönder (ONAY)"</a> &gt; Run workflow. Göndermeyeceksen hiçbir şey yapmana gerek yok.</div>"""
     send([USER], "[ONAY BEKLİYOR] " + subject, banner + html, "ONAY BEKLİYOR\n" + run_url + "\n\n" + text, attach=fname)
     print("Önizleme gönderildi:", USER)
 
