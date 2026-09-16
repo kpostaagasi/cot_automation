@@ -1,0 +1,42 @@
+name: CFTC COT Haftalık Rapor
+on:
+  schedule:
+    - cron: "30 5 * * 1"   # Pazartesi 08:30 İstanbul (UTC+3)
+  workflow_dispatch: {}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - run: python send_weekly.py prepare
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_TO:   ${{ secrets.MAIL_TO }}
+          MAIL_CC:   ${{ secrets.MAIL_CC }}
+          RUN_URL:   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MPLBACKEND: Agg
+      - uses: actions/upload-artifact@v4
+        with: { name: cot-paket, path: out/, retention-days: 7 }
+
+  send:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: ekip-gonderim      # Required reviewer = Kamil. Onay gelene kadar bu job bekler.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/download-artifact@v4
+        with: { name: cot-paket, path: out/ }
+      - run: python send_weekly.py send
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_TO:   ${{ secrets.MAIL_TO }}
+          MAIL_CC:   ${{ secrets.MAIL_CC }}
