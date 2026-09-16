@@ -12,7 +12,8 @@ DS = {"COMM": ("kh3c-gbw2", "m_money_positions_long_all", "m_money_positions_sho
 # ad, kod, çarpan, sabit fiyat (fallback)
 PAGES = [
  ("Emtialar", "COMM", [("WTI Crude Oil","067651",1000,70.0),("Natural Gas","023651",10000,3.0),
-   ("Gold","088691",100,2300.0),("Silver","084691",5000,28.0),("Copper","085692",25000,4.5),("Corn","002602",5000,4.5)]),
+   ("Gold","088691",100,2300.0),("Silver","084691",5000,28.0),("Copper","085692",25000,4.5),
+   ("Corn","002602",5000,4.5),("Wheat (SRW)","001602",5000,5.5)]),
  ("Döviz", "TFF", [("Euro FX","099741",125000,1.08),("Japanese Yen","097741",12500000,0.0067),
    ("British Pound","096742",62500,1.27),("Australian Dollar","232741",100000,0.66),
    ("Canadian Dollar","090741",100000,0.73),("Mexican Peso","095741",500000,0.055)]),
@@ -73,8 +74,9 @@ def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
                      color="white", fontsize=8.5, va="center")
             h = .042; w = h * LOGO.shape[1] / LOGO.shape[0] * (8.27 / 11.69)
             lax = fig.add_axes([.98 - w, .9625 - h / 2, w, h]); lax.imshow(LOGO, interpolation="antialiased"); lax.axis("off"); lax.set_zorder(10)
-            gs = fig.add_gridspec(3, 2, left=.05, right=.98, top=.88, bottom=.09, hspace=.62, wspace=.12)
-            for i in range(6):
+            nrow = -(-len(ks) // 2)   # 2 kolon, kontrat sayısına göre satır
+            gs = fig.add_gridspec(nrow, 2, left=.05, right=.98, top=.88, bottom=.09, hspace=.62, wspace=.12)
+            for i in range(nrow * 2):
                 ax = fig.add_subplot(gs[i // 2, i % 2])
                 if i >= len(ks): ax.axis("off"); continue
                 name, code, mult, fb = ks[i]
@@ -108,7 +110,7 @@ def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
                              f"Net: {int(last.net):+,} kontrat ({fmt_notional(notional)})".replace(",", "."),
                              fontsize=7.5, color=RED if flag else DARK, weight="bold", loc="left")
             fig.text(.02, .035, f"Metodoloji: net = long − short ({cat}); Z = (x − μ{WIN}h) / σ{WIN}h, kontrat bazında. "
-                     f"Notional = net × çarpan × fiyat. Fiyat: Yahoo Finance (canlı; corn ÷100, JPY/CAD/MXN 1/x), tahvil = par (100).",
+                     f"Notional = net × çarpan × fiyat. Fiyat: Yahoo Finance (canlı; corn/wheat ÷100, JPY/CAD/MXN 1/x), tahvil = par (100).",
                      fontsize=6.5, color=DARK)
             fig.text(.02, .018, f"Kaynak: CFTC Public Reporting API | Son COT haftası: {latest:%d.%m.%Y} (Salı pozisyonu) | "
                      f"Rapor tarihi: {today:%d.%m.%Y}", fontsize=6.5, color=DARK)

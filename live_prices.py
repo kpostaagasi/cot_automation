@@ -7,6 +7,7 @@ UA = {"User-Agent": "Mozilla/5.0"}
 PRICE_MAP = {
     "067651": ("CL=F", None), "023651": ("NG=F", None), "088691": ("GC=F", None),
     "084691": ("SI=F", None), "085692": ("HG=F", None), "002602": ("ZC=F", "div100"),
+    "001602": ("ZW=F", "div100"),
     "099741": ("EURUSD=X", None), "097741": ("JPY=X", "inv"), "096742": ("GBPUSD=X", None),
     "232741": ("AUDUSD=X", None), "090741": ("CAD=X", "inv"), "095741": ("MXN=X", "inv"),
     "13874A": ("ES=F", None), "209742": ("NQ=F", None), "239742": ("RTY=F", None),
