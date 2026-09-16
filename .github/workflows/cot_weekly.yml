@@ -1,7 +1,7 @@
 name: CFTC COT Haftalık Rapor
 on:
   schedule:
-    - cron: "30 5 * * 1"   # Pazartesi 08:30 İstanbul (UTC+3)
+    - cron: "0 6 * * 1"   # Pazartesi 09:00 İstanbul (UTC+3)
   workflow_dispatch: {}
 
 jobs:

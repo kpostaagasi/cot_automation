@@ -1,6 +1,6 @@
 # BV Portföy CFTC COT Haftalık Rapor
 
-Her Pazartesi 08:30'da (İstanbul) raporu üretir ve **onay beklemeden** `MAIL_TO` listesine yollar.
+Her Pazartesi 09:00'da (İstanbul) raporu üretir ve **onay beklemeden** `MAIL_TO` listesine yollar.
 
 ## Kurulum
 1. Bu klasörü **private** bir GitHub reposuna yükle.
