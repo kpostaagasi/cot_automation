@@ -1,25 +1,32 @@
-name: 1 - COT Rapor Hazırla
+name: CFTC COT Haftalık Rapor
 on:
   schedule:
     - cron: "30 5 * * 1"   # Pazartesi 08:30 İstanbul (UTC+3)
   workflow_dispatch: {}
 
 jobs:
-  prepare:
+  rapor:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -r requirements.txt
-      - run: python send_weekly.py prepare
+      - name: Raporu üret
+        run: python send_weekly.py prepare
         env:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           MAIL_TO:   ${{ secrets.MAIL_TO }}
           MAIL_CC:   ${{ secrets.MAIL_CC }}
-          # Önizleme mailindeki link: 2. workflow'un sayfası (Run workflow ile gönderim)
-          RUN_URL:   ${{ github.server_url }}/${{ github.repository }}/actions/workflows/cot_2_gonder.yml
           MPLBACKEND: Agg
+      - name: Ekibe gönder
+        run: python send_weekly.py send
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_TO:   ${{ secrets.MAIL_TO }}
+          MAIL_CC:   ${{ secrets.MAIL_CC }}
       - uses: actions/upload-artifact@v4
+        if: always()
         with: { name: cot-paket, path: out/, retention-days: 7 }

@@ -1,6 +1,6 @@
-"""Haftalık COT raporu, onaylı gönderim.
-  python send_weekly.py prepare  -> raporu üretir, out/ klasörüne yazar, önizlemeyi SADECE SMTP_USER'a yollar
-  python send_weekly.py send     -> out/ içindeki onaylanmış paketi ekibe yollar (yeniden üretmez)
+"""Haftalık COT raporu, otomatik gönderim (onay adımı yok).
+  python send_weekly.py prepare  -> raporu üretir, out/ klasörüne PDF + mail.json yazar, mail atmaz
+  python send_weekly.py send     -> out/ içindeki paketi ekibe yollar (yeniden üretmez)
 Ortam: SMTP_USER, SMTP_PASS (Gmail App Password), MAIL_TO (virgülle), MAIL_CC (opsiyonel)
 """
 import os, sys, ssl, smtplib, datetime as dt, traceback
@@ -69,12 +69,7 @@ Notional: Yahoo Finance canlı fiyat, tahviller par. Otomatik üretilmiştir.</p
     subject = f"CFTC COT Pozisyonlanma Raporu | {latest:%d.%m.%Y}"
     json.dump({"subject": subject, "html": html, "text": text, "pdf": os.path.basename(fname)},
               open(os.path.join(OUT, "mail.json"), "w", encoding="utf-8"), ensure_ascii=False)
-    run_url = os.environ.get("RUN_URL", "")
-    banner = f"""<div style="background:#FFF5F5;border:1px solid #BC1324;padding:10px;margin-bottom:12px;font-family:Arial">
-<b>ONAY BEKLİYOR.</b> Bu mail henüz ekibe gitmedi. Alıcılar: {", ".join(TO)}{(" | CC: " + ", ".join(CC)) if CC else ""}<br>
-Göndermek için: <a href="{run_url}">"2 - COT Ekibe Gönder (ONAY)"</a> &gt; Run workflow. Göndermeyeceksen hiçbir şey yapmana gerek yok.</div>"""
-    send([USER], "[ONAY BEKLİYOR] " + subject, banner + html, "ONAY BEKLİYOR\n" + run_url + "\n\n" + text, attach=fname)
-    print("Önizleme gönderildi:", USER)
+    print("Rapor hazır:", fname)
 
 def send_approved():
     p = json.load(open(os.path.join(OUT, "mail.json"), encoding="utf-8"))
