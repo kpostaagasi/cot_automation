@@ -30,3 +30,6 @@ Her Pazartesi 09:00'da (İstanbul) raporu üretir, önizlemeyi sana yollar. Ekib
 2. Onaylıyorsan maildeki linke tıkla > `2 - COT Ekibe Gönder (ONAY)` > Run workflow. Aynı PDF ve aynı metin ekibe gider, rapor yeniden üretilmez.
 3. Onaylamıyorsan hiçbir şey yapma; paket 7 gün sonra artifact ile birlikte düşer.
 4. `run_id` alanı boş bırakılırsa en son **başarılı** hazırlık run'ının paketi gönderilir; eski bir paketi göndermek için run id gir.
+
+## Lisans
+Kod MIT lisanslıdır (bkz. `LICENSE`). `bv_logo_white.png` ve BV Portföy adı/markası lisans kapsamında değildir.
