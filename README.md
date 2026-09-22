@@ -3,19 +3,22 @@
 Her Pazartesi 09:00'da (İstanbul) raporu üretir, önizlemeyi sana yollar. Ekibe gönderim SENİN ONAYINLA olur.
 
 ## Kurulum
-1. Bu klasörü **private** bir GitHub reposuna yükle.
+1. Bu klasörü bir GitHub reposuna yükle (public veya private).
 2. Gmail: Google Hesabı > Güvenlik > 2 Adımlı Doğrulama açık olmalı > "Uygulama şifreleri" > yeni şifre oluştur (16 hane).
 3. Repo > Settings > Secrets and variables > Actions > New repository secret:
    - `SMTP_USER`: gmail adresin
    - `SMTP_PASS`: uygulama şifresi
    - `MAIL_TO`: alıcılar, virgülle (ör. `a@bvportfoy.com,b@bvportfoy.com`)
    - `MAIL_CC`: opsiyonel
+   - `PACKAGE_KEY`: uzun rastgele bir parola (ör. `openssl rand -base64 32`). Hazırlanan paket artifact'e bu anahtarla şifreli yüklenir; public repoda artifact'leri herkes indirebildiği için zorunludur.
 4. Actions sekmesi > "1 - COT Rapor Hazırla" > Run workflow ile test et. MAIL_TO'yu ilk testte sadece kendi adresin yap.
 
 ## Davranış
 - Veri doğrulaması başarısızsa ekibe gitmez, sadece sana [HATA] maili gelir.
 - Son COT haftası 11 günden eskiyse (CFTC gecikmesi) ekibe gitmez, sana [UYARI] gelir.
 - Canlı fiyat alınamazsa sabit fiyat kullanılır ve mailde belirtilir.
+- Loglara e-posta adresi yazılmaz (public repoda Actions logları herkese açıktır).
+- Public repoda 60 gün boyunca hiç commit olmazsa GitHub zamanlanmış workflow'u otomatik kapatır; Actions sekmesinden tekrar "Enable workflow" yapman gerekir.
 - Gönderim saatini değiştirmek için `.github/workflows/cot_1_hazirla.yml` içindeki cron'u düzenle (UTC).
 
 ## Lokal çalıştırma

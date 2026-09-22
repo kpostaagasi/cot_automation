@@ -4,6 +4,9 @@ on:
     - cron: "0 6 * * 1"   # Pazartesi 09:00 İstanbul (UTC+3)
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -11,6 +14,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
+      - name: Secret kontrolü
+        env:
+          PACKAGE_KEY: ${{ secrets.PACKAGE_KEY }}
+        run: '[ -n "$PACKAGE_KEY" ] || { echo "PACKAGE_KEY secret tanımlı değil"; exit 1; }'
       - run: pip install -r requirements.txt
       - run: python send_weekly.py prepare
         env:
@@ -21,5 +28,10 @@ jobs:
           # Önizleme mailindeki link: 2. workflow'un sayfası (Run workflow ile gönderim)
           RUN_URL:   ${{ github.server_url }}/${{ github.repository }}/actions/workflows/cot_2_gonder.yml
           MPLBACKEND: Agg
+      # Public repoda artifact'ler herkes tarafından indirilebilir: paket şifreli yüklenir
+      - name: Paketi şifrele
+        env:
+          PACKAGE_KEY: ${{ secrets.PACKAGE_KEY }}
+        run: tar -czf - out | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:PACKAGE_KEY -out cot-paket.enc
       - uses: actions/upload-artifact@v4
-        with: { name: cot-paket, path: out/, retention-days: 7 }
+        with: { name: cot-paket, path: cot-paket.enc, retention-days: 7 }

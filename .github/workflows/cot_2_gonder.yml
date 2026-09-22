@@ -23,12 +23,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ inputs.run_id }}
+          PACKAGE_KEY: ${{ secrets.PACKAGE_KEY }}
         run: |
           set -euo pipefail
           [ -n "$RUN_ID" ] || RUN_ID=$(gh run list -w cot_1_hazirla.yml -s success -L 1 --json databaseId -q '.[0].databaseId')
           [ -n "$RUN_ID" ] || { echo "Başarılı hazırlık run'ı bulunamadı"; exit 1; }
           echo "Gönderilecek paket run: $RUN_ID"
-          gh run download "$RUN_ID" -n cot-paket -D out
+          gh run download "$RUN_ID" -n cot-paket -D pkg
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PACKAGE_KEY -in pkg/cot-paket.enc | tar -xzf -
           ls -l out
       - run: python send_weekly.py send
         env:

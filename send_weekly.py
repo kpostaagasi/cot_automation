@@ -74,12 +74,12 @@ Notional: Yahoo Finance canlı fiyat, tahviller par. Otomatik üretilmiştir.</p
 <b>ONAY BEKLİYOR.</b> Bu mail henüz ekibe gitmedi. Alıcılar: {", ".join(TO)}{(" | CC: " + ", ".join(CC)) if CC else ""}<br>
 Göndermek için: <a href="{run_url}">"2 - COT Ekibe Gönder (ONAY)"</a> &gt; Run workflow. Göndermeyeceksen hiçbir şey yapmana gerek yok.</div>"""
     send([USER], "[ONAY BEKLİYOR] " + subject, banner + html, "ONAY BEKLİYOR\n" + run_url + "\n\n" + text, attach=fname)
-    print("Önizleme gönderildi:", USER)
+    print("Önizleme gönderildi (SMTP_USER)")  # public log: adres yazdırma
 
 def send_approved():
     p = json.load(open(os.path.join(OUT, "mail.json"), encoding="utf-8"))
     send(TO, p["subject"], p["html"], p["text"], attach=os.path.join(OUT, p["pdf"]), cc=CC)
-    print("Ekibe gönderildi:", TO)
+    print(f"Ekibe gönderildi: {len(TO)} alıcı, {len(CC)} CC")  # public log: adres yazdırma
 
 if __name__ == "__main__":
     {"prepare": prepare, "send": send_approved}[sys.argv[1]]()
