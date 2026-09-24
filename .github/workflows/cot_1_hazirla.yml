@@ -1,7 +1,7 @@
 name: 1 - COT Rapor Hazırla
 on:
-  schedule:
-    - cron: "0 6 * * 1"   # Pazartesi 09:00 İstanbul (UTC+3)
+  # Zamanlama cron-job.org'da: Pazartesi 09:00 İstanbul, workflow_dispatch
+  # (GitHub schedule'ı bu hesapta 4-6 saat gecikiyor).
   workflow_dispatch: {}
 
 permissions:
