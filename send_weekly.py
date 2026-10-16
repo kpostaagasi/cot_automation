@@ -13,7 +13,7 @@ TO = [x.strip() for x in os.environ["MAIL_TO"].split(",") if x.strip()]
 CC = [x.strip() for x in os.environ.get("MAIL_CC", "").split(",") if x.strip()]
 MAX_AGE_DAYS = 11  # son COT haftası bundan eskiyse (yayın gecikmesi) ekibe gönderme
 
-def send(to, subject, html, text, attach=None, cc=()):
+def send(to, subject, html, text, attach=None, cc=(), inline=()):
     m = EmailMessage()
     m["From"], m["To"], m["Subject"] = USER, ", ".join(to), subject
     if cc: m["Cc"] = ", ".join(cc)
@@ -21,6 +21,10 @@ def send(to, subject, html, text, attach=None, cc=()):
     if attach:
         with open(attach, "rb") as f:
             m.add_attachment(f.read(), maintype="application", subtype="pdf", filename=os.path.basename(attach))
+    for path, cid in inline:  # gövdeye gömülü grafikler (cid)
+        with open(path, "rb") as f:
+            m.get_payload()[1].add_related(f.read(), maintype="image", subtype="png",
+                                           filename=os.path.basename(path), cid=f"<{cid}>")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
         s.login(USER, PWD); s.send_message(m)
 
@@ -54,9 +58,21 @@ def prepare():
     if s["stale_prices"]:
         stale = "<p style='color:#BC1324'>Canlı fiyat alınamayan kontratlar (sabit fiyat kullanıldı): " + \
                 ", ".join(p[0] for p in s["stale_prices"]) + "</p>"
+    imgs = [(os.path.join(OUT, f), cid) for f, cid in
+            [("tahvil_faizleri.png", "tahvil_faizleri"), ("hisse_endeksleri.png", "hisse_endeksleri")]
+            if os.path.exists(os.path.join(OUT, f))]
+    img = {cid: (path, cid) for path, cid in imgs}
+
+    def _img_html(cid):
+        if cid not in img: return ""
+        p, c = img[cid]
+        return f'<p><img src="cid:{c}" style="width:100%;max-width:760px;border:1px solid #ddd"/></p>'
+
     html = f"""<div style="font-family:Arial,sans-serif;font-size:13px;color:#222">
 <p>Merhaba,</p>
 <p>{latest:%d.%m.%Y} tarihli (Salı pozisyonu) CFTC COT pozisyonlanma raporu ektedir.</p>
+<p><b>Tahvil faizleri:</b></p>{_img_html("tahvil_faizleri")}
+<p><b>Hisse endeksleri:</b></p>{_img_html("hisse_endeksleri")}
 <p><b>Sıra dışı konumlanmalar (|Z| ≥ 2):</b></p>
 <table style="border-collapse:collapse;font-size:12px">{tbl if s["anomalies"] else row(["Bu hafta eşik aşımı yok"])}</table>
 <p><b>Eşiğe yakın (1.75 ≤ |Z| &lt; 2):</b></p><ul>{near}</ul>
@@ -67,18 +83,20 @@ Notional: Yahoo Finance canlı fiyat, tahviller par. Otomatik üretilmiştir.</p
     text = f"{latest:%d.%m.%Y} tarihli CFTC COT raporu ektedir. Sıra dışı: " + \
            (", ".join(a[1] for a in s["anomalies"]) or "yok")
     subject = f"CFTC COT Pozisyonlanma Raporu | {latest:%d.%m.%Y}"
-    json.dump({"subject": subject, "html": html, "text": text, "pdf": os.path.basename(fname)},
+    json.dump({"subject": subject, "html": html, "text": text, "pdf": os.path.basename(fname),
+               "inline": [[os.path.basename(p), cid] for p, cid in imgs]},
               open(os.path.join(OUT, "mail.json"), "w", encoding="utf-8"), ensure_ascii=False)
     run_url = os.environ.get("RUN_URL", "")
     banner = f"""<div style="background:#FFF5F5;border:1px solid #BC1324;padding:10px;margin-bottom:12px;font-family:Arial">
 <b>ONAY BEKLİYOR.</b> Bu mail henüz ekibe gitmedi. Alıcılar: {", ".join(TO)}{(" | CC: " + ", ".join(CC)) if CC else ""}<br>
 Göndermek için: <a href="{run_url}">"2 - COT Ekibe Gönder (ONAY)"</a> &gt; Run workflow. Göndermeyeceksen hiçbir şey yapmana gerek yok.</div>"""
-    send([USER], "[ONAY BEKLİYOR] " + subject, banner + html, "ONAY BEKLİYOR\n" + run_url + "\n\n" + text, attach=fname)
+    send([USER], "[ONAY BEKLİYOR] " + subject, banner + html, "ONAY BEKLİYOR\n" + run_url + "\n\n" + text, attach=fname, inline=imgs)
     print("Önizleme gönderildi (SMTP_USER)")  # public log: adres yazdırma
 
 def send_approved():
     p = json.load(open(os.path.join(OUT, "mail.json"), encoding="utf-8"))
-    send(TO, p["subject"], p["html"], p["text"], attach=os.path.join(OUT, p["pdf"]), cc=CC)
+    inline = [(os.path.join(OUT, f), cid) for f, cid in p.get("inline", []) if os.path.exists(os.path.join(OUT, f))]
+    send(TO, p["subject"], p["html"], p["text"], attach=os.path.join(OUT, p["pdf"]), cc=CC, inline=inline)
     print(f"Ekibe gönderildi: {len(TO)} alıcı, {len(CC)} CC")  # public log: adres yazdırma
 
 if __name__ == "__main__":
