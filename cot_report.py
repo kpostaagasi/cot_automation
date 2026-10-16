@@ -25,15 +25,34 @@ PAGES = [
 LOGO = plt.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), "bv_logo_white.png"))
 WIN, MINP, THR, VIEW_START = 104, 52, 2.0, "2023-01-01"
 
-# Grafik arkası overlay'ler. Tahvil: kontratın teslim sepetine karşılık gelen CMT yield (FRED, sağ eksen %).
-# CME sepetleri (kalan vade): 2Y 1y9m-2y, 5Y 4y2m-5y3m, 10Y 6.5-10y, Bond 15-<25y, Ultra >=25y.
-# FRED'de 15Y/25Y CMT yok -> Bond = 20Y, Ultra = 30Y proxy.
-YIELD_MAP = {"042601": ("DGS2", "2Y"), "044601": ("DGS5", "5Y"), "043602": ("DGS10", "10Y"),
-             "020601": ("DGS20", "20Y"), "020604": ("DGS30", "30Y")}
-YIELD_COLOR = {"DGS2": "#1F77B4", "DGS5": "#2CA02C", "DGS10": "#FF7F0E", "DGS20": "#9467BD", "DGS30": "#8C564B"}
-EQUITY = {"^GSPC": ("S&P 500", "#0A9396"), "^NDX": ("Nasdaq-100", "#6A4C93"), "^RUT": ("Russell 2000", "#B5651D")}
-# Hisse endeksi kontratları -> spot endeks (arka plan)
-EQUITY_MAP = {"13874A": "^GSPC", "209742": "^NDX", "239742": "^RUT"}
+ZOOM_DAYS = 62  # sağdaki yakın görünüm paneli: son ~2 ay
+# Mail gövdesine girecek paneller (PDF'teki ile birebir): WTI, Euro FX, E-mini S&P 500, UST 10Y
+MAIL_PANELS = ["067651", "099741", "13874A", "043602"]
+
+# Grafik arkası overlay'ler (sağ eksen, kendi ölçeğinde).
+# Tahvil: kontratın teslim sepetine karşılık gelen CMT yield (FRED). CME sepetleri (kalan vade):
+# 2Y 1y9m-2y, 5Y 4y2m-5y3m, 10Y 6.5-10y, Bond 15-<25y, Ultra >=25y. FRED'de 15Y/25Y CMT yok -> Bond = 20Y, Ultra = 30Y proxy.
+# kod -> (kaynak, sembol, etiket, renk, ters eksen, y formatı)
+OVERLAY = {
+    "042601": ("fred", "DGS2", "2Y UST yield", "#1F77B4", False, "pct"),
+    "044601": ("fred", "DGS5", "5Y UST yield", "#2CA02C", False, "pct"),
+    "043602": ("fred", "DGS10", "10Y UST yield", "#FF7F0E", False, "pct"),
+    "020601": ("fred", "DGS20", "20Y UST yield", "#9467BD", False, "pct"),
+    "020604": ("fred", "DGS30", "30Y UST yield", "#8C564B", False, "pct"),
+    "13874A": ("yh", "^GSPC", "S&P 500", "#0A9396", False, "int"),
+    "209742": ("yh", "^NDX", "Nasdaq-100", "#6A4C93", False, "int"),
+    "239742": ("yh", "^RUT", "Russell 2000", "#B5651D", False, "int"),
+    # Döviz: piyasa kotasyonu; USD bazlı kotasyonlarda eksen ters -> kontrat (yabancı para) yönüyle aynı hareket
+    "099741": ("yh", "EURUSD=X", "EUR/USD", "#1F4E99", False, "fx4"),
+    "097741": ("yh", "JPY=X", "USD/JPY (ters eksen)", "#1F4E99", True, "fx2"),
+    "096742": ("yh", "GBPUSD=X", "GBP/USD", "#1F4E99", False, "fx4"),
+    "232741": ("yh", "AUDUSD=X", "AUD/USD", "#1F4E99", False, "fx4"),
+    "090741": ("yh", "CAD=X", "USD/CAD (ters eksen)", "#1F4E99", True, "fx4"),
+    "095741": ("yh", "MXN=X", "USD/MXN (ters eksen)", "#1F4E99", True, "fx2"),
+}
+FMT = {"pct": lambda v, _: f"%{v:.1f}", "int": lambda v, _: f"{v:,.0f}".replace(",", "."),
+       "fx4": lambda v, _: f"{v:.3f}", "fx2": lambda v, _: f"{v:.1f}"}
+LAST_FMT = {"pct": "%{:.2f}", "int": "{:,.0f}", "fx4": "{:.4f}", "fx2": "{:.2f}"}
 
 _cache = {}
 
@@ -62,39 +81,88 @@ def yahoo_series(sym):
         _cache[("yh", sym)] = s
     return _cache[("yh", sym)]
 
-def add_overlays(ax, code, title, bg):
-    """Z-score paneline arka plan serileri: tahvilde yield (sağ eksen %) + S&P 500, hissede spot endeks.
-    Z-score ekseni üstte kalır; panel arka plan rengi en alttaki twin eksene taşınır."""
-    specs = []  # (seri, etiket, renk, stil, sağ eksen etiketi göster)
-    if code in YIELD_MAP:
-        fid, lbl = YIELD_MAP[code]
-        y = fred_series(fid)
-        specs.append((y, f"{lbl} UST yield (sağ, son %{y.iloc[-1]:.2f})", YIELD_COLOR[fid], "-", True))
-        sym = "^GSPC"
-    else:
-        sym = EQUITY_MAP.get(code)
-    if sym:
-        e = yahoo_series(sym); lbl, col = EQUITY[sym]
-        specs.append((e, f"{lbl} (arka, son {e.iloc[-1]:,.0f})".replace(",", "."), col, "-.", not specs))
-    if not specs: return []
-    handles, twins = [], []
-    for s, lbl, col, ls, show in specs:
-        tw = ax.twinx(); twins.append(tw)
-        s = s[s.index >= VIEW_START]
-        h, = tw.plot(s.index, s.values, color=col, lw=1.0, ls=ls, alpha=.85, label=lbl)
-        handles.append(h)
-        pad = (s.max() - s.min()) * .08; tw.set_ylim(s.min() - pad, s.max() + pad)
-        for sp in tw.spines.values(): sp.set_visible(False)
-        if show:
-            tw.tick_params(labelsize=5.5, colors=col, length=2)
-            if code in YIELD_MAP: tw.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"%{v:.1f}"))
-        else:
-            tw.set_yticks([])
-    for k, tw in enumerate(twins):  # en alttaki twin panel rengini taşır, Z-score ekseni en üstte
-        tw.set_zorder(k * .1); tw.patch.set_visible(k == 0)
-    twins[0].set_facecolor(bg)
+def overlay_series(code):
+    if code not in OVERLAY: return None
+    src, sym, *_ = OVERLAY[code]
+    return fred_series(sym) if src == "fred" else yahoo_series(sym)
+
+def add_overlay(ax, code, start, fs):
+    """Z-score paneline arka plan serisi (sağ eksen). Z-score ekseni üstte kalır; panel rengi twin'e taşınır."""
+    s = overlay_series(code)
+    if s is None: return []
+    _, _, lbl, col, inv, fmt = OVERLAY[code]
+    last = LAST_FMT[fmt].format(s.iloc[-1]).replace(",", ".")
+    s = s[s.index >= pd.Timestamp(start) - pd.Timedelta(days=7)]
+    tw = ax.twinx()
+    h, = tw.plot(s.index, s.values, color=col, lw=1.0, alpha=.85, label=f"{lbl} (sağ, son {last})")
+    pad = (s.max() - s.min()) * .08 or abs(s.iloc[-1]) * .01
+    lo, hi = s.min() - pad, s.max() + pad
+    tw.set_ylim((hi, lo) if inv else (lo, hi))
+    for sp in tw.spines.values(): sp.set_visible(False)
+    tw.tick_params(labelsize=5.5 * fs, colors=col, length=2)
+    tw.yaxis.set_major_formatter(plt.FuncFormatter(FMT[fmt]))
+    tw.set_zorder(0); tw.set_facecolor(ax.get_facecolor())
     ax.set_zorder(1); ax.patch.set_visible(False)
-    return handles
+    return [h]
+
+def _z_axes(ax, d, bg, fs):
+    ax.set_facecolor(bg); ax.grid(color=GRID, lw=.6)
+    for sp in ax.spines.values(): sp.set_color("#CCCCCC")
+    ax.set_ylim(-3.2, 3.2); ax.tick_params(labelsize=6 * fs, colors=DARK)
+    x, z = d.date, d.net_z
+    ax.fill_between(x, 0, z, where=z >= 0, color="green", alpha=.12, interpolate=True)
+    ax.fill_between(x, 0, z, where=z < 0, color=RED, alpha=.12, interpolate=True)
+    ax.plot(x, z, color=RED, lw=1.1, label="Net Pozisyon Z-Score")
+    ax.plot(x, d.oi_z, color="#777777", lw=.9, ls="--", label="Open Interest Z-Score")
+    ax.axhline(0, color=DARK, lw=.6)
+    for t in (THR, -THR): ax.axhline(t, color=RED, lw=.7, ls=":")
+
+def draw_contract(ax, zax, d, name, code, last, notional, flag, fs=1.0):
+    """Ana panel (2023+) + sağında son ~2 ay yakın görünüm. PDF ve mail aynı fonksiyonu kullanır."""
+    bg = "#FFF5F5" if flag else "white"
+    _z_axes(ax, d, bg, fs)
+    extra = []
+    try:
+        extra = add_overlay(ax, code, VIEW_START, fs)
+    except Exception as e:
+        warnings.warn(f"[cot_report] {name} arka plan serisi alınamadı: {e}")
+    try:  # x ekseni: arka plan serisi son COT Salı'sından sonrasını da gösterir
+        end = max(d.date.max(), overlay_series(code).index.max()) if code in OVERLAY else d.date.max()
+    except Exception:
+        end = d.date.max()
+    ax.set_xlim(d.date.min(), end)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
+    hs = ax.get_legend_handles_labels()[0] + extra
+    ax.legend(handles=hs, loc="lower left", ncol=len(hs) if fs > 1 else 2, fontsize=5 * fs if len(hs) <= 2 else 4.6 * fs, frameon=False)
+    tag = " [SIRA DIŞI]" if flag else ""
+    ax.set_title(f"{name} [{code}]{tag}\nNet Z: {last.net_z:+.2f} | OI Z: {last.oi_z:+.2f} | "
+                 f"Net: {int(last.net):+,} kontrat ({fmt_notional(notional)})".replace(",", "."),
+                 fontsize=7.5 * fs, color=RED if flag else DARK, weight="bold", loc="left")
+    # yakın görünüm: COT haftalık olduğundan ~9 nokta; arka plan serisi günlük
+    z0 = d.date.max() - pd.Timedelta(days=ZOOM_DAYS)
+    dz = d[d.date >= z0 - pd.Timedelta(days=7)]  # sol kenarda çizgi kesilmesin
+    _z_axes(zax, dz, bg, fs)
+    zax.plot(dz.date, dz.net_z, "o", color=RED, ms=2 * fs)
+    try:
+        add_overlay(zax, code, z0, fs)
+    except Exception:
+        pass  # uyarı ana panelde verildi
+    zax.set_xlim(z0, end + pd.Timedelta(days=2))
+    zax.tick_params(labelleft=False)
+    zax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.TU, interval=2 if fs > 1 else 3))
+    zax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m"))
+    zax.set_title("Son 2 ay", fontsize=6.5 * fs, color=DARK, loc="left")
+
+def panel_axes(fig, spec):
+    """Bir kontrat hücresini ana panel + yakın görünüm olarak böl."""
+    sub = spec.subgridspec(1, 2, width_ratios=[3, 1], wspace=.22)
+    return fig.add_subplot(sub[0]), fig.add_subplot(sub[1])
+
+def render_mail_panel(path, d, name, code, last, notional, flag):
+    fig = plt.figure(figsize=(10, 3.3), dpi=120)
+    gs = fig.add_gridspec(1, 1, left=.045, right=.955, top=.8, bottom=.1)
+    draw_contract(*panel_axes(fig, gs[0]), d, name, code, last, notional, flag, fs=1.35)
+    fig.savefig(path); plt.close(fig)
 
 def fetch(kind, codes):
     ds, lc, sc, _ = DS[kind]
@@ -121,39 +189,12 @@ def fetch(kind, codes):
     return df
 
 NOTES = {
- "Tahviller": "\nArka plan: FRED CMT yield, sağ eksen (teslim sepeti kalan vade: 2Y 1y9m–2y, 5Y 4y2m–5y3m, 10Y 6.5–10y, Bond 15–<25y → 20Y proxy, "
-              "Ultra ≥25y → 30Y proxy) ve S&P 500 (Yahoo, kendi ölçeğinde, eksensiz).",
- "Hisse Endeksleri": "\nArka plan: kontratın spot endeksi (Yahoo Finance; S&P 500, Nasdaq-100, Russell 2000), kendi ölçeğinde, eksensiz.",
+ "Tahviller": "\nArka plan (sağ eksen): FRED CMT yield; teslim sepeti kalan vade 2Y 1y9m–2y, 5Y 4y2m–5y3m, 10Y 6.5–10y, "
+              "Bond 15–<25y → 20Y proxy, Ultra ≥25y → 30Y proxy. Sağdaki panel: son 2 ay.",
+ "Hisse Endeksleri": "\nArka plan (sağ eksen): kontratın spot endeksi (Yahoo Finance; S&P 500, Nasdaq-100, Russell 2000). Sağdaki panel: son 2 ay.",
+ "Döviz": "\nArka plan (sağ eksen): spot kur (Yahoo Finance). USD/JPY, USD/CAD, USD/MXN ters eksende: çizgi yukarı = yabancı para değerleniyor (kontrat yönü). "
+          "Sağdaki panel: son 2 ay.",
 }
-
-def render_email_charts(outdir):
-    """Mail gövdesi için tahvil faizi + hisse endeksi PNG'leri; üretilen dosya yollarını döner."""
-    paths = []
-    def _fig(title):
-        fig, ax = plt.subplots(figsize=(9, 3.2), dpi=110)
-        ax.grid(color=GRID, lw=.6); ax.tick_params(labelsize=7, colors=DARK)
-        for sp in ax.spines.values(): sp.set_color("#CCCCCC")
-        ax.set_title(title, fontsize=9, loc="left", weight="bold", color=DARK)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
-        return fig, ax
-    def _save(fig, ax, fn, ncol):
-        ax.legend(ncol=ncol, fontsize=7.5, frameon=False, loc="upper left")
-        fig.tight_layout(); p = os.path.join(outdir, fn); fig.savefig(p); plt.close(fig); paths.append(p)
-
-    fig, ax = _fig(f"ABD Tahvil Faizleri (FRED CMT, günlük, %) | {VIEW_START[:4]}+")
-    for fid, lbl in YIELD_MAP.values():
-        y = fred_series(fid)
-        ax.plot(y.index, y.values, color=YIELD_COLOR[fid], lw=1.2, label=f"{lbl}  %{y.iloc[-1]:.2f}")
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"%{v:.1f}"))
-    _save(fig, ax, "tahvil_faizleri.png", 5)
-
-    fig, ax = _fig(f"Hisse Endeksleri (Yahoo Finance, {VIEW_START[:4]} başı = 100)")
-    for sym, (lbl, col) in EQUITY.items():
-        e = yahoo_series(sym); r = 100 * e / e.iloc[0]
-        ax.plot(r.index, r.values, color=col, lw=1.2, label=f"{lbl}  {e.iloc[-1]:,.0f} ({r.iloc[-1]-100:+.0f}%)".replace(",", "."))
-    ax.axhline(100, color=DARK, lw=.6)
-    _save(fig, ax, "hisse_endeksleri.png", 3)
-    return paths
 
 def fmt_notional(v):
     s = "-" if v < 0 else "+"
@@ -161,7 +202,7 @@ def fmt_notional(v):
 
 def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
     today = dt.date.today()
-    data, rowcheck, anomalies, prices = {}, [], [], []
+    data, rowcheck, anomalies, prices, panels = {}, [], [], [], {}
     for title, kind, ks in PAGES:
         df = fetch(kind, [k[1] for k in ks])
         data[title] = df
@@ -180,17 +221,15 @@ def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
             h = .042; w = h * LOGO.shape[1] / LOGO.shape[0] * (8.27 / 11.69)
             lax = fig.add_axes([.98 - w, .9625 - h / 2, w, h]); lax.imshow(LOGO, interpolation="antialiased"); lax.axis("off"); lax.set_zorder(10)
             nrow = -(-len(ks) // 2)   # 2 kolon, kontrat sayısına göre satır
-            gs = fig.add_gridspec(nrow, 2, left=.05, right=.98, top=.88, bottom=.09, hspace=.62, wspace=.12)
+            gs = fig.add_gridspec(nrow, 2, left=.04, right=.97, top=.88, bottom=.09, hspace=.62, wspace=.14)
             for i in range(nrow * 2):
-                ax = fig.add_subplot(gs[i // 2, i % 2])
-                if i >= len(ks): ax.axis("off"); continue
+                if i >= len(ks): continue
+                ax, zax = panel_axes(fig, gs[i // 2, i % 2])
                 name, code, mult, fb = ks[i]
                 d = df[(df.code == code)].dropna(subset=["net_z"])
                 d = d[d.date >= VIEW_START]
-                ax.set_facecolor("white"); ax.grid(color=GRID, lw=.6)
-                for sp in ax.spines.values(): sp.set_color("#CCCCCC")
-                ax.set_ylim(-3.2, 3.2); ax.tick_params(labelsize=6, colors=DARK)
                 if len(d) < 10:
+                    zax.axis("off")
                     ax.set_title(f"{name} [{code}]", fontsize=8, color=DARK, weight="bold")
                     ax.text(.5, .5, "Yetersiz / Eksik Veri", ha="center", transform=ax.transAxes, color="grey"); continue
                 last = d.iloc[-1]
@@ -199,28 +238,10 @@ def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
                 prices.append((name, price, fb, src))
                 flag = abs(last.net_z) >= THR or abs(last.oi_z) >= THR
                 if flag:
-                    ax.set_facecolor("#FFF5F5")
                     anomalies.append((title, name, code, last.net_z, last.oi_z, int(last.net), notional))
-                x, z = d.date, d.net_z
-                ax.fill_between(x, 0, z, where=z >= 0, color="green", alpha=.12, interpolate=True)
-                ax.fill_between(x, 0, z, where=z < 0, color=RED, alpha=.12, interpolate=True)
-                ax.plot(x, z, color=RED, lw=1.1, label="Net Pozisyon Z-Score")
-                ax.plot(x, d.oi_z, color="#777777", lw=.9, ls="--", label="Open Interest Z-Score")
-                ax.axhline(0, color=DARK, lw=.6)
-                for t in (THR, -THR): ax.axhline(t, color=RED, lw=.7, ls=":")
-                extra = []
-                try:
-                    extra = add_overlays(ax, code, title, ax.get_facecolor())
-                except Exception as e:
-                    warnings.warn(f"[cot_report] {name} arka plan serisi alınamadı: {e}")
-                ax.set_xlim(x.min(), x.max())
-                ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
-                hs = ax.get_legend_handles_labels()[0] + extra
-                ax.legend(handles=hs, loc="lower left", ncol=2, fontsize=5 if len(hs) <= 2 else 4.5, frameon=False)
-                tag = " [SIRA DIŞI]" if flag else ""
-                ax.set_title(f"{name} [{code}]{tag}\nNet Z: {last.net_z:+.2f} | OI Z: {last.oi_z:+.2f} | "
-                             f"Net: {int(last.net):+,} kontrat ({fmt_notional(notional)})".replace(",", "."),
-                             fontsize=7.5, color=RED if flag else DARK, weight="bold", loc="left")
+                draw_contract(ax, zax, d, name, code, last, notional, flag)
+                if code in MAIL_PANELS:
+                    panels[code] = (d, name, code, last, notional, flag)
             fig.text(.02, .035, f"Metodoloji: net = long − short ({cat}); Z = (x − μ{WIN}h) / σ{WIN}h, kontrat bazında. "
                      f"Notional = net × çarpan × fiyat. Fiyat: Yahoo Finance (canlı; corn/wheat ÷100, JPY/CAD/MXN 1/x), tahvil = par (100)." +
                      NOTES.get(title, ""), fontsize=6.5 if title not in NOTES else 5.6, color=DARK)
@@ -229,10 +250,14 @@ def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
             fig.text(.98, .018, "BV Portföy Fon Yönetimi", fontsize=6.5, color=RED, ha="right", weight="bold")
             pdf.savefig(fig); plt.close(fig)
 
-    try:  # mail gövdesi grafikleri (best-effort: alınamazsa mail grafiksiz gider)
-        charts = render_email_charts(os.path.dirname(os.path.abspath(out_path)))
-    except Exception as e:
-        charts = []; warnings.warn(f"[cot_report] Mail grafikleri üretilemedi: {e}")
+    charts = []  # mail gövdesi: PDF'teki panellerin aynısı (best-effort: alınamazsa mail grafiksiz gider)
+    for code in MAIL_PANELS:
+        if code not in panels: continue
+        path = os.path.join(os.path.dirname(os.path.abspath(out_path)), f"panel_{code}.png")
+        try:
+            render_mail_panel(path, *panels[code]); charts.append(path)
+        except Exception as e:
+            warnings.warn(f"[cot_report] Mail paneli {code} üretilemedi: {e}")
 
     # Doğrulama çıktıları
     bad = [x for x in rowcheck if x[3] < 400]

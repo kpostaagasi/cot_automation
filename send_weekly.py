@@ -30,12 +30,11 @@ def send(to, subject, html, text, attach=None, cc=(), inline=()):
 
 def _cid(path): return os.path.splitext(os.path.basename(path))[0]
 
-CHART_TITLES = {"tahvil_faizleri": "Tahvil faizleri", "hisse_endeksleri": "Hisse endeksleri"}
-
-def charts_html(paths):
-    return "".join(f'<p><b>{CHART_TITLES.get(_cid(p), _cid(p))}:</b><br>'
-                   f'<img src="cid:{_cid(p)}" alt="{_cid(p)}" style="width:100%;max-width:760px;border:1px solid #ddd"></p>'
-                   for p in paths)
+def charts_html(paths):  # PDF'teki panellerin aynısı; başlık görselin içinde
+    if not paths: return ""
+    return "<p><b>Seçili grafikler</b> (sağdaki panel: son 2 ay):</p>" + "".join(
+        f'<p><img src="cid:{_cid(p)}" alt="{_cid(p)}" style="width:100%;max-width:900px;border:1px solid #ddd"></p>'
+        for p in paths)
 
 def row(cells, bold=False):
     tag = "th" if bold else "td"
@@ -77,7 +76,7 @@ def prepare():
 {stale}
 {charts_html(charts)}
 <p style="font-size:11px;color:#777">Z-score: 104 haftalık rolling, kontrat bazında. Emtia: Managed Money, diğerleri: Leveraged Funds.
-Notional: Yahoo Finance canlı fiyat, tahviller par. Faizler: FRED CMT; endeksler: Yahoo Finance. Otomatik üretilmiştir.</p>
+Notional: Yahoo Finance canlı fiyat, tahviller par. Grafik arka planı: FRED CMT yield / Yahoo Finance spot. Otomatik üretilmiştir.</p>
 <p>İyi çalışmalar,<br>Kamil Postaağası</p></div>"""
     text = f"{latest:%d.%m.%Y} tarihli CFTC COT raporu ektedir. Sıra dışı: " + \
            (", ".join(a[1] for a in s["anomalies"]) or "yok")
