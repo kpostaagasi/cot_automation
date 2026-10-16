@@ -1,8 +1,8 @@
-import datetime as dt, requests, numpy as np, pandas as pd, io, os, warnings
+import datetime as dt, requests, numpy as np, pandas as pd
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, matplotlib.dates as mdates
 from matplotlib.backends.backend_pdf import PdfPages
-from live_prices import get_live_price, UA
+from live_prices import get_live_price
 
 RED, DARK, GRID = "#BC1324", "#222222", "#F0F0F0"
 BASE = "https://publicreporting.cftc.gov/resource/{}.json"
@@ -22,45 +22,9 @@ PAGES = [
  ("Tahviller", "TFF", [("UST 2Y","042601",2000,100.0),("UST 5Y","044601",1000,100.0),("UST 10Y","043602",1000,100.0),
    ("UST Bond","020601",1000,100.0),("Ultra Bond","020604",1000,100.0)]),
 ]
+import os
 LOGO = plt.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), "bv_logo_white.png"))
 WIN, MINP, THR, VIEW_START = 104, 52, 2.0, "2023-01-01"
-
-# Tahvil grafikleri arkası: kontrat -> FRED CMT yield serisi
-# UST Bond sepette kalan vade 15-25y (pratikte 20y), Ultra Bond >=25y (pratikte 30y)
-YIELD_MAP = {"042601": "DGS2", "044601": "DGS5", "043602": "DGS10", "020601": "DGS20", "020604": "DGS30"}
-YIELD_LBL = {"DGS2": "2Y", "DGS5": "5Y", "DGS10": "10Y", "DGS20": "20Y", "DGS30": "30Y"}
-YIELD_COLOR = {"DGS2": "#1F77B4", "DGS5": "#2CA02C", "DGS10": "#FF7F0E", "DGS20": "#9467BD", "DGS30": "#8C564B"}
-EQUITY_COLOR = {"^GSPC": ("S&P 500", "#0A2E5C"), "^NDX": ("Nasdaq-100", "#D62728"), "^RUT": ("Russell 2000", "#2CA02C")}
-
-_fred_cache, _yh_cache = {}, {}
-
-def fred_series(fid):
-    if fid not in _fred_cache:
-        # NOT: FRED, 'Mozilla/5.0' UA'sını sessizce read-timeout yapar -> headers gönderme
-        r = requests.get("https://fred.stlouisfed.org/graph/fredgraph.csv",
-                         params={"id": fid, "cosd": VIEW_START}, timeout=60)
-        r.raise_for_status()
-        df = pd.read_csv(io.StringIO(r.text))
-        s = pd.to_numeric(df[fid], errors="coerce")
-        s.index = pd.to_datetime(df["observation_date"])
-        if s.empty: raise RuntimeError(f"FRED {fid} boş döndü")
-        _fred_cache[fid] = s
-    return _fred_cache[fid]
-
-def yahoo_series(sym):
-    if sym not in _yh_cache:
-        r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
-                         params={"range": "3y", "interval": "1d"}, headers=UA, timeout=30)
-        r.raise_for_status()
-        res = r.json()["chart"]["result"][0]
-        s = pd.Series(res["indicators"]["quote"][0]["close"],
-                      index=pd.to_datetime(res["timestamp"], unit="s")).dropna()
-        if s.empty: raise RuntimeError(f"Yahoo {sym} boş döndü")
-        _yh_cache[sym] = s
-    return _yh_cache[sym]
-
-def _rebase(s):  # 0-1 min-max: panel y-ekseniyle aynı ölçekte arka planda çizilir
-    v = s.dropna(); return (v - v.min()) / (v.max() - v.min())
 
 def fetch(kind, codes):
     ds, lc, sc, _ = DS[kind]
@@ -89,33 +53,6 @@ def fetch(kind, codes):
 def fmt_notional(v):
     s = "-" if v < 0 else "+"
     return f"{s}${abs(v)/1e9:.2f}B" if abs(v) >= 1e9 else f"{s}${abs(v)/1e6:.0f}M"
-
-def render_email_charts(outdir):
-    """Mail gövdesi için tahvil faizi + hisse endeksi PNG grafikleri."""
-    ts0 = pd.Timestamp(VIEW_START)
-    fig, ax = plt.subplots(figsize=(9, 3.2), dpi=110)
-    ax.set_facecolor("white"); ax.grid(color=GRID, lw=.6)
-    for fid in ("DGS2", "DGS5", "DGS10", "DGS20", "DGS30"):
-        s = fred_series(fid).loc[ts0:].dropna()
-        if s.empty: continue
-        ax.plot(s.index, s.values, color=YIELD_COLOR[fid], lw=1.2, label=f"{YIELD_LBL[fid]} {s.iloc[-1]:.2f}%")
-    ax.set_title("Tahvil Faizleri (FRED CMT, günlük %)", fontsize=9, loc="left", weight="bold", color=DARK)
-    ax.legend(ncol=5, fontsize=7.5, frameon=False); ax.tick_params(labelsize=7, colors=DARK)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
-    fig.tight_layout(); fig.savefig(os.path.join(outdir, "tahvil_faizleri.png")); plt.close(fig)
-
-    fig, ax = plt.subplots(figsize=(9, 3.2), dpi=110)
-    ax.set_facecolor("white"); ax.grid(color=GRID, lw=.6)
-    for sym, (lbl, col) in EQUITY_COLOR.items():
-        s = yahoo_series(sym).loc[ts0:].dropna()
-        if s.empty: continue
-        r = 100 * s / s.iloc[0]
-        ax.plot(r.index, r.values, color=col, lw=1.2, label=f"{lbl} {s.iloc[-1]:,.0f}")
-    ax.set_title("Hisse Endeksleri (rebase = 100, 2023+ seviye: Yahoo Finance)", fontsize=9, loc="left", weight="bold", color=DARK)
-    ax.legend(ncol=3, fontsize=7.5, frameon=False); ax.tick_params(labelsize=7, colors=DARK)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
-    fig.tight_layout(); fig.savefig(os.path.join(outdir, "hisse_endeksleri.png")); plt.close(fig)
-
 
 def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
     today = dt.date.today()
@@ -166,40 +103,19 @@ def main(out_path="BV_Portfoy_CFTC_COT_Advanced_Report.pdf"):
                 ax.plot(x, d.oi_z, color="#777777", lw=.9, ls="--", label="Open Interest Z-Score")
                 ax.axhline(0, color=DARK, lw=.6)
                 for t in (THR, -THR): ax.axhline(t, color=RED, lw=.7, ls=":")
-                if title == "Tahviller":  # arka plan: vadeye karşılık CMT yield + S&P 500 (rebase)
-                    fid = YIELD_MAP[code]
-                    try:
-                        ys = fred_series(fid).dropna()
-                        yn = -3.2 + 6.4 * _rebase(ys)
-                        ax.plot(yn.index, yn.values, color=YIELD_COLOR[fid], lw=1.2, alpha=.9, zorder=.5,
-                                label=f"{YIELD_LBL[fid]} yield (son %{ys.iloc[-1]:.1f})")
-                        spx = yahoo_series("^GSPC")
-                        sn = -3.2 + 6.4 * _rebase(spx)
-                        ax.plot(sn.index, sn.values, color="#0A9396", lw=1.0, ls="-.", alpha=.8, zorder=.5,
-                                label="S&P 500 (arka)")
-                    except Exception as e:
-                        warnings.warn(f"[cot_report] {name} arka plan alınamadı: {e}")
                 ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%y"))
-                nleg = len(ax.get_legend_handles_labels()[0])
-                ax.legend(loc="lower left", ncol=min(nleg, 3), fontsize=4.3 if nleg > 2 else 5, frameon=False)
+                ax.legend(loc="lower left", ncol=2, fontsize=5, frameon=False)
                 tag = " [SIRA DIŞI]" if flag else ""
                 ax.set_title(f"{name} [{code}]{tag}\nNet Z: {last.net_z:+.2f} | OI Z: {last.oi_z:+.2f} | "
                              f"Net: {int(last.net):+,} kontrat ({fmt_notional(notional)})".replace(",", "."),
                              fontsize=7.5, color=RED if flag else DARK, weight="bold", loc="left")
-            meth = f"Metodoloji: net = long − short ({cat}); Z = (x − μ{WIN}h) / σ{WIN}h, kontrat bazında. " \
-                   f"Notional = net × çarpan × fiyat. Fiyat: Yahoo Finance (canlı; corn/wheat ÷100, JPY/CAD/MXN 1/x), tahvil = par (100)."
-            if title == "Tahviller":
-                meth += " Arka plan: FRED CMT yield (UST Bond → 20Y, Ultra → 30Y proxy; sepete kalan vade 15–25y / ≥25y) ve S&P 500; min-max ölçekli."
-            fig.text(.02, .035, meth, fontsize=6.5, color=DARK)
+            fig.text(.02, .035, f"Metodoloji: net = long − short ({cat}); Z = (x − μ{WIN}h) / σ{WIN}h, kontrat bazında. "
+                     f"Notional = net × çarpan × fiyat. Fiyat: Yahoo Finance (canlı; corn/wheat ÷100, JPY/CAD/MXN 1/x), tahvil = par (100).",
+                     fontsize=6.5, color=DARK)
             fig.text(.02, .018, f"Kaynak: CFTC Public Reporting API | Son COT haftası: {latest:%d.%m.%Y} (Salı pozisyonu) | "
                      f"Rapor tarihi: {today:%d.%m.%Y}", fontsize=6.5, color=DARK)
             fig.text(.98, .018, "BV Portföy Fon Yönetimi", fontsize=6.5, color=RED, ha="right", weight="bold")
             pdf.savefig(fig); plt.close(fig)
-
-    try:  # mail gövdesi grafikleri (best-effort)
-        render_email_charts(os.path.dirname(os.path.abspath(out_path)) or ".")
-    except Exception as e:
-        warnings.warn(f"[cot_report] Email grafikleri üretilemedi: {e}")
 
     # Doğrulama çıktıları
     bad = [x for x in rowcheck if x[3] < 400]
