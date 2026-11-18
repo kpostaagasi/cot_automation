@@ -55,6 +55,8 @@ def prepare():
     age = (week - latest).days
     if age > MAX_AGE_DAYS:
         msg = f"Son COT haftası {latest:%d.%m.%Y} ({age} gün önce). CFTC yayını gecikmiş olabilir; ekibe gönderilmedi."
+        print(f"ATLANDI: {msg}")            # public log: çıkış kodu 1'in nedeni görünsün
+        print(f"::warning::{msg}")          # Actions ek açıklaması
         send([USER], "[UYARI] CFTC COT verisi güncel değil", msg, msg, attach=fname)
         sys.exit(1)  # onay adımı hiç açılmaz
 
